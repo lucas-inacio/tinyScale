@@ -1,17 +1,3 @@
-/* ATtiny85 as an I2C Master   Ex2        BroHogan                           1/21/11
- * Modified for Digistump - Digispark LCD Shield by Erik Kettenburg 11/2012
- * SETUP:
- * ATtiny Pin 1 = (RESET) N/U                      ATtiny Pin 2 = (D3) N/U
- * ATtiny Pin 3 = (D4) to LED1                     ATtiny Pin 4 = GND
- * ATtiny Pin 5 = SDA on DS1621  & GPIO            ATtiny Pin 6 = (D1) to LED2
- * ATtiny Pin 7 = SCK on DS1621  & GPIO            ATtiny Pin 8 = VCC (2.7-5.5V)
- * NOTE! - It's very important to use pullups on the SDA & SCL lines!
- * PCA8574A GPIO was used wired per instructions in "info" folder in the LiquidCrystal_I2C lib.
- * This ex assumes A0-A2 are set HIGH for an addeess of 0x3F
- * LiquidCrystal_I2C lib was modified for ATtiny - on Playground with TinyWireM lib.
- * TinyWireM USAGE & CREDITS: - see TinyWireM.h
- */
-
 #include <HX711.h>
 #include <TinyLiquidCrystal_I2C.h>
 #include <EEPROM.h>
@@ -41,6 +27,7 @@ ISR(PCINT0_vect) {
   }
 }
 
+// Carrega as configurações de calibração da EEPROM
 void carrega_config(HX711 &sensor) {
   long zero = 0;
   uint8_t *zeroBytes = (uint8_t*)&zero;
@@ -56,6 +43,7 @@ void carrega_config(HX711 &sensor) {
   escala.set_scale(fator);
 }
 
+// Salva as configurações de calibração na EEPROM
 void salva_config(HX711 &sensor) {
   long zero = escala.get_offset();
   uint8_t *zeroBytes = (uint8_t*)&zero;
@@ -68,6 +56,10 @@ void salva_config(HX711 &sensor) {
     EEPROM.update(4 + i, fatorBytes[i]);
 }
 
+// Realiza o ajuste de calibração da célula de carga
+// As configurações são salvas apenas no final
+// Retorna false quando a calibração for concluída, fazendo retornar
+// ao modo normal
 bool modo_calibrar(bool pressionado) {
   static int etapa = 0;
   if (pressionado) {
@@ -100,6 +92,7 @@ bool modo_calibrar(bool pressionado) {
   return true;
 }
 
+// Exibe a carga atual na tela
 void modo_normal(bool pressionado) {
   static unsigned long delta = 0;
   if(pressionado) {
@@ -130,10 +123,10 @@ void setup(){
   
   escala.begin(CELULA_CARGA_DOUT, CELULA_CARGA_SCK);
   carrega_config(escala);
-
   inicio = millis();
   pinMode(BOTAO, INPUT_PULLUP);
 
+  // Habilita interrupção no pino PB3
   GIMSK |= _BV(PCIE);
   PCMSK |= _BV(PCINT3);
   sei();
