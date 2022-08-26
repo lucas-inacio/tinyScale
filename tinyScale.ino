@@ -24,8 +24,22 @@ HX711 escala;
 TinyLiquidCrystal_I2C lcd(GPIO_ADDR, 16, 2);
 
 const unsigned long CLIQUE_LONGO_MS = 1000;
-const unsigned long CLIQUE_CURTO_MS = 100;
+const unsigned long CLIQUE_CURTO_MS = 60;
 const int BOTAO = 3;
+
+volatile unsigned long tempo_botao;
+volatile unsigned long inicio;
+volatile bool botaoPressionado = false;
+
+ISR(PCINT0_vect) {
+  unsigned long agora = millis();
+  if(digitalRead(BOTAO) == LOW) {
+    inicio = agora;
+  } else {
+    tempo_botao = agora - inicio;
+    botaoPressionado = true;
+  }
+}
 
 void carrega_config(HX711 &sensor) {
   long zero = 0;
@@ -74,7 +88,9 @@ bool modo_calibrar(bool pressionado) {
         long unidades = escala.get_units(10);
         float fator = unidades / 1000.0f;
         escala.set_scale(fator);
+        cli();
         salva_config(escala);
+        sei();
         return false;
       }
       break;
@@ -106,9 +122,7 @@ void modo_normal(bool pressionado) {
   }
 }
 
-unsigned long inicio = 0;
 bool modo_config = false;
-bool botaoPressionado = false;
 void setup(){  
   lcd.init();
   lcd.backlight();
@@ -119,33 +133,26 @@ void setup(){
 
   inicio = millis();
   pinMode(BOTAO, INPUT_PULLUP);
+
+  GIMSK |= _BV(PCIE);
+  PCMSK |= _BV(PCINT3);
+  sei();
 }
 
 void loop(){
-  unsigned long tempo_botao = 0;
-  unsigned long agora = millis();
-  if(digitalRead(BOTAO) == LOW) {
-    if(!botaoPressionado) {
-      inicio = agora;
-      botaoPressionado = true;
-    }
-  } else {
-    if(botaoPressionado) {
-      tempo_botao = agora - inicio;
-      botaoPressionado = false;
-    }
-  }
-
   bool houveClique = false;
-  if(tempo_botao >= CLIQUE_LONGO_MS) {
-    if(!modo_config) {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Remova o peso");
+  if(botaoPressionado) {
+    if(tempo_botao >= CLIQUE_LONGO_MS) {
+      if(!modo_config) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Remova o peso");
+      }
+      modo_config = true;
+    } else if(tempo_botao >= CLIQUE_CURTO_MS) {
+      houveClique = true;
     }
-    modo_config = true;
-  } else if(tempo_botao >= CLIQUE_CURTO_MS) {
-    houveClique = true;
+    botaoPressionado = false;
   }
 
   if(modo_config)
